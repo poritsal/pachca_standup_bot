@@ -206,7 +206,7 @@ def get_thread_responses(message_id):
 def handle_first_contact_with_user(user_id):
     if user_id not in student_contacts:
         welcome_message = (
-            "Я бот для проведения стендап-отчетов. Пожалуйста, отвечай на мои следующие сообщения в комментариях в течение часа.\n"
+            "Я бот для проведения стендап-отчетов. Пожалуйста, отвечай на мои следующие сообщения в комментариях.\n"
             "Если ты заболел или ушёл в отпуск, напиши /sick или /rest соответственно."
         )
         send_message("user", user_id, welcome_message)
@@ -225,7 +225,7 @@ def handle_standup(chat_id):
         if (member not in heads) and (member != bot_id) and (member not in incapable_student):
             handle_first_contact_with_user(member)
             student_of_chat.setdefault(chat_id, []).append(member)
-            standup_message = f"Напиши стендап-отчет для следующего проекта '{chat['name']}':\n1) Что было сделано?\n2) Какие планы до следующего стендапа?\n3) Какие трудности возникли?\n4) Нужно ли с кем-то связаться для их решения?"
+            standup_message = f"Напиши стендап-отчет для проекта '{chat['name']}':\n1) Что было сделано?\n2) Какие планы до следующего стендапа?\n3) Какие трудности возникли?\n4) Нужно ли с кем-то связаться для их решения?"
             message_data = send_message("user", member, standup_message)
             if message_data:
                 message_ids.setdefault(chat_id, {})[member] = message_data['id']
