@@ -72,26 +72,26 @@ async def handle_webhook(event: WebhookEvent):
             if user_id in incapable_student:
                 incapable_student.pop(user_id)
 
-    elif content.startswith("/heads"):
+    elif content.startswith("/ignore"):
         if chat['owner_id'] == bot_id:
             return
         nicknames = content.split()[1:]
         chat_id = event.entity_id
 
         if nicknames:
-            if chat_id in heads_of_chat:
-                heads_of_chat.pop(chat_id)
-            heads_message = "Руководителями чата назначены:\n"
+            if chat_id in ignore_members:
+                ignore_members.pop(chat_id)
+            ignore_message = "Игнорируемые пользователи чата:\n"
             for nickname in nicknames:
                 user = get_user_id_by_nickname(nickname[1:])
                 if not user:
                     send_message("disscussion", chat_id, f"Пользователь '{nickname}' не найден, повторите запрос")
                     return
-                heads_message += f"{user['first_name']} {user['last_name']}\n"
-                heads_of_chat.setdefault(chat_id, []).append(user['id'])
-            send_message("discussion", chat_id, heads_message)
+                ignore_message += f"{user['first_name']} {user['last_name']}\n"
+                ignore_members.setdefault(chat_id, []).append(user['id'])
+            send_message("discussion", chat_id, ignore_message)
         else:
-            send_message("discussion", chat_id, "Неправильный формат ввод, пример: '/head @nickname1 @nickname2'")
+            send_message("discussion", chat_id, "Неправильный формат ввод, пример: '/ignore @nickname1 @nickname2'")
 
     elif content.startswith("/schedule"):
         if chat['owner_id'] == bot_id:
@@ -122,9 +122,17 @@ async def handle_webhook(event: WebhookEvent):
             datetime.strptime(time, "%H:%M")
             schedule_of_chats.setdefault(chat_id, []).append((day, time))
 
-        schedule_message = f"Расписание для стендапов установлено:\n"
+        schedule_message = f"**Расписание для стендапов установлено:**\n"
         for day, time in schedule_of_chats[chat_id]:
             schedule_message += f"{day} {time}\n"
+
+        schedule_message += "**Участники:\n**"
+        chat = get_chat_info(chat_id)
+        ignore = ignore_members[chat_id] if chat_id in ignore_members else []
+        for member in chat['member_ids']:
+            if (member not in ignore) and (member != bot_id) and (member not in incapable_student):
+                user_info = get_user_info(member)
+                schedule_message += f"{user_info['first_name']} {user_info['last_name']}\n"
 
         send_message("discussion", chat_id, schedule_message)
 
@@ -155,7 +163,7 @@ async def handle_webhook(event: WebhookEvent):
             help_message = (
                 "Используйте:\n"
                 "/pause, чтобы приостановить стендапы в этом чате.\n"
-                "/head, чтобы назначить руководителей для стендапов.\n"
+                "/ignore, чтобы назначить руководителей для стендапов.\n"
                 "/limit, чтобы установить ограничение по времени на стендап. Формат: /limit <минуты>.\n"
                 "/schedule, чтобы установить расписание стендапов. Формат: /schedule <день> <время> ...\n"
                 "/delete, чтобы удалить информацию о стендапах в этом чате.\n"
@@ -176,8 +184,8 @@ async def handle_webhook(event: WebhookEvent):
         chat_id = event.entity_id
         if chat_id in schedule_of_chats:
             schedule_of_chats.pop(event.entity_id)
-        if chat_id in heads_of_chat:
-            heads_of_chat.pop(event.entity_id)
+        if chat_id in ignore_members:
+            ignore_members.pop(event.entity_id)
         if chat_id in time_limit_of_chats:
             time_limit_of_chats.pop(event.entity_id)
         if chat_id in paused_chats:
@@ -212,7 +220,4 @@ async def main_loop():
 
 
 if __name__ == '__main__':
-    schedule_of_chats = {10044727: [('среда', '18:51')]}
     asyncio.run(main_loop())
-    # import uvicorn
-    # uvicorn.run(app, host="127.0.0.1", port=8000)
