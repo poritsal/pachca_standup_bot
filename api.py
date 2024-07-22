@@ -2,6 +2,7 @@ import asyncio
 import requests
 import os
 from dotenv import load_dotenv
+from database import *
 
 load_dotenv()
 access_token = os.getenv('access_token')
@@ -9,22 +10,23 @@ bot_id = int(os.getenv('bot_id'))
 base_url = "https://api.pachca.com/api/shared/v1"
 
 
-incapable_student = {}  # {user_id: status} sick rest
-student_of_chat = {}  # {chat_id: [member1_id, member2_id]} reviewed students
-ignore_members = {}  # {chat_id: [member1_id, member2_id]}
 message_ids = {}  # {chat_id: {member_id: message_id}}
-student_contacts = set()  # get welcome message to student
-chat_contacts = set()  # get welcome message to chat
-schedule_of_chats = {}  # {chat_id: [(day1, time1), (day2, time2)]}
-time_limit_of_chats = {}  # {chat_id: limit}
-paused_chats = []
+student_of_chat = {}  # {chat_id: [member1_id, member2_id]} reviewed students
 
-# chat_id | name | owner_id | members_id   | pause | limit | contact_with_chat | heads_of_chat | schedule_of_chat | reviewed_students | message_ids
-# --------------------------------------------------------------------------------------------------------------------------------------------------
-# int     | str  | int      | array_of_int | bool  | int   | bool              | array_of_int  | (day, time)      | array_of_int      | array_of_int
+# student_contacts = set()  # get welcome message to student
+# incapable_student = {}  # {user_id: status} sick rest
+# ignore_members = {}  # {chat_id: [member1_id, member2_id]}
+# chat_contacts = set()  # get welcome message to chat
+# schedule_of_chats = {}  # {chat_id: [(day1, time1), (day2, time2)]}
+# time_limit_of_chats = {}  # {chat_id: limit}
+# paused_chats = []
+
+# chat_id | name | owner_id | members_id         | pause | limit | contact_with_chat | heads_of_chat       | schedule_of_chat                    |
+# int     | str  | int      | array_of_int(JSON) | bool  | int   | bool              | array_of_int(JSON)  | array_of_pair(day, time)(JSON)      |
 
 # student_id | incapable | contact
 # int        | str       | bool
+
 
 def get_list_of_users():
     headers = {
@@ -208,54 +210,69 @@ def get_thread_responses(message_id):
         return []
 
 
-# Function to check and send welcome message if first contact через бота
-def handle_first_contact_with_user(user_id):
-    if user_id not in student_contacts:
-        welcome_message = (
-            "Я бот для проведения стендап-отчетов. Пожалуйста, отвечай на мои следующие сообщения в комментариях.\n"
-            "Если ты заболел или ушёл в отпуск, напиши **/sick** или **/rest** соответственно.\n\n"
-            "**Формат ответа на стендапы:**\n"
-            "1) текст\n"
-            "2) текст\n"
-            "3) текст\n"
-            "4) текст\n"
-        )
-        send_message("user", user_id, welcome_message)
-        student_contacts.add(user_id)
+async def handle_first_contact_with_user(user_id):
+    async with SessionLocal() as session:
+        query = select(StudentOrm).where(StudentOrm.student_id == user_id)
+        result = await session.execute(query)
+        student = result.scalars().first()
+
+        if not student:
+            welcome_message = (
+                "Я бот для проведения стендап-отчетов. Пожалуйста, отвечай на мои следующие сообщения в комментариях.\n"
+                "Если ты заболел или ушёл в отпуск, напиши **/sick** или **/rest** соответственно.\n\n"
+                "**Формат ответа на стендапы:**\n"
+                "1) текст\n"
+                "2) текст\n"
+                "3) текст\n"
+                "4) текст\n"
+            )
+            send_message("user", user_id, welcome_message)
+
+            new_student = StudentOrm(student_id=user_id, incapable="")
+            session.add(new_student)
+            await session.commit()
 
 
 # A function for interviewing students of chat
-def handle_standup(chat_id):
-    chat = get_chat_info(chat_id)
-
-    if chat['owner_id'] == bot_id:
+async def handle_standup(chat):
+    if chat.owner_id == bot_id:
         return
 
-    ignore = ignore_members[chat_id] if chat_id in ignore_members else []
-    for member in chat['member_ids']:
-        if (member not in ignore) and (member != bot_id) and (member not in incapable_student):
-            handle_first_contact_with_user(member)
-            student_of_chat.setdefault(chat_id, []).append(member)
-            standup_message = (f"**Напиши в комментариях стендап-отчет для проекта '{chat['name']}':**\n"
+    async with SessionLocal() as session:
+        query = select(StudentOrm).where(StudentOrm.incapable.in_(["болеет", "отдыхает"]))
+        result = await session.execute(query)
+        incapable_students = [student.student_id for student in result.scalars().all()]
+
+    for member in chat.member_ids:
+        if member not in chat.ignore_members and member != bot_id and member not in incapable_students:
+            await handle_first_contact_with_user(member)
+            student_of_chat.setdefault(chat.chat_id, []).append(member)
+            standup_message = (f"**Напиши в комментариях стендап-отчет для проекта '{chat.name}':**\n"
                                f"1) Что было сделано?\n"
                                f"2) Какие планы до следующего стендапа?\n"
                                f"3) Какие трудности возникли?\n"
                                f"4) Нужно ли с кем-то связаться для их решения?")
             message_data = send_message("user", member, standup_message)
             if message_data:
-                message_ids.setdefault(chat_id, {})[member] = message_data['id']
+                message_ids.setdefault(chat.chat_id, {})[member] = message_data['id']
 
 
 # get answers on standup messages
-async def handle_answers(chat_id, time):
+async def handle_answers(chat, time):
+    chat_id = chat.chat_id
     members = student_of_chat[chat_id]
     late_student = []
     students_with_incorrect_answer = {}
 
     await asyncio.sleep(time)
 
+    async with SessionLocal() as session:
+        query = select(StudentOrm).where(StudentOrm.incapable.in_(["болеет", "отдыхает"]))
+        result = await session.execute(query)
+        incapable_students = {student.student_id: student.incapable for student in result.scalars().all()}
+
     for member in members:
-        if member in message_ids[chat_id] and member not in incapable_student:
+        if member in message_ids[chat_id] and member not in incapable_students:
             answer = get_thread_responses(message_ids[chat_id][member])
             if answer is not None:
                 user_info = get_user_info(member)
@@ -286,11 +303,10 @@ async def handle_answers(chat_id, time):
         user_info = get_user_info(member)
         message_content += f"Пользователь '{user_info['first_name']} {user_info['last_name']}' опоздал\n"
 
-    ignore = ignore_members[chat_id] if chat_id in ignore_members else []
     for member in get_chat_members(chat_id):
-        if member in incapable_student and member not in ignore:
+        if member in incapable_students and member not in chat.ignore_members:
             user_info = get_user_info(member)
-            message_content += f"Пользователь '{user_info['first_name']} {user_info['last_name']}' {incapable_student[member]}\n"
+            message_content += f"Пользователь '{user_info['first_name']} {user_info['last_name']}' {incapable_students[member]}\n"
 
     if message_content != "":
         send_message("discussion", chat_id, message_content)
@@ -300,26 +316,48 @@ async def handle_answers(chat_id, time):
 
 
 # welcome message to chat
-def handle_first_contact_with_chat():
-    chats = get_all_chats()
-    for chat in chats:
-        if (chat['owner_id'] != bot_id) and (chat['id'] not in chat_contacts):
-            chat_contacts.add(chat['id'])
-            input_message = (
-                "Я бот для проведения стендап-отчетов. Давайте настроим необходимые параметры:\n\n"
-                "**1. Игнорируемые пользователи:**\n"
-                "   Пожалуйста, укажите имена пользователей, которые не будут опрашиваться. Нужно написать сообщение, начинающееся с **/ignore** и указать имена пользователей через пробел. Пример: '/ignore @nickname1 @nickname2')\n"
-                "**2. Ограничение времени на стендап:**\n"
-                "   Установите максимальное время (в минутах), которое может занимать каждый стендап, с помощью команды **/limit**. Пример: '/limit 60'\n"
-                "**3. Расписание стендапов:**\n"
-                "   Укажите время, когда будут проводиться стендапы, используя команду **/schedule**. Формат ввода: '/schedule <день> <время>'. Пример: '/schedule понедельник 18:00 среда 18:00 пятница 18:00'.\n\n"
-                "Для приостановки или возобновления стендапов в этом чате, используйте команду **/pause**. Для удаления информацию о стендапах используйте **/delete**. Для вызова справки используйте **/help**"
-            )
-            send_message("discussion", chat['id'], input_message)
+async def handle_first_contact_with_chat():
+    async with SessionLocal() as session:
+        api_chats = get_all_chats()
+        db_chats = await get_all_chats_from_db(session)
 
+        db_chats_dict = {chat.chat_id: chat for chat in db_chats}
 
+        for chat in api_chats:
+            chat_id = chat['id']
+            if (chat['owner_id'] != bot_id) and (chat_id not in db_chats_dict):
+                input_message = (
+                    "Я бот для проведения стендап-отчетов. Давайте настроим необходимые параметры:\n\n"
+                    "**1. Игнорируемые пользователи:**\n"
+                    "   Пожалуйста, укажите имена пользователей, которые не будут опрашиваться. Нужно написать сообщение, начинающееся с **/ignore** и указать имена пользователей через пробел. Пример: '/ignore @nickname1 @nickname2'\n"
+                    "**2. Ограничение времени на стендап:**\n"
+                    "   Установите максимальное время (в минутах), которое может занимать каждый стендап, с помощью команды **/limit**. Пример: '/limit 60'\n"
+                    "**3. Расписание стендапов:**\n"
+                    "   Укажите время, когда будут проводиться стендапы, используя команду **/schedule**. Формат ввода: '/schedule <день> <время>'. Пример: '/schedule понедельник 18:00 среда 18:00 пятница 18:00'.\n\n"
+                    "Для приостановки или возобновления стендапов в этом чате, используйте команду **/pause**. Для удаления информацию о стендапах используйте **/delete**. Для вызова справки используйте **/help**"
+                )
+                send_message("discussion", chat_id, input_message)
 
-
-
-
-
+                new_chat = ChatOrm(
+                    chat_id=chat_id,
+                    name=chat['name'],
+                    owner_id=chat['owner_id'],
+                    member_ids=chat['member_ids'],
+                    pause=False,
+                    limit=60,
+                    ignore_members=[],
+                    schedule_of_chat=[]
+                )
+                session.add(new_chat)
+                await session.commit()
+            elif chat['owner_id'] != bot_id:
+                if db_chats_dict[chat_id].name != chat['name'] or db_chats_dict[chat_id].member_ids != chat['member_ids']:
+                    await session.execute(
+                        update(ChatOrm)
+                        .where(ChatOrm.chat_id == chat_id)
+                        .values(
+                            name=chat['name'],
+                            member_ids=chat['member_ids']
+                        )
+                    )
+                    await session.commit()
