@@ -8,32 +8,14 @@ load_dotenv()
 access_token = os.getenv('access_token')
 bot_id = int(os.getenv('bot_id'))
 base_url = "https://api.pachca.com/api/shared/v1"
-
+header = {"Authorization": f"Bearer {access_token}"}
 
 message_ids = {}  # {chat_id: {member_id: message_id}}
 student_of_chat = {}  # {chat_id: [member1_id, member2_id]} reviewed students
 
-# student_contacts = set()  # get welcome message to student
-# incapable_student = {}  # {user_id: status} sick rest
-# ignore_members = {}  # {chat_id: [member1_id, member2_id]}
-# chat_contacts = set()  # get welcome message to chat
-# schedule_of_chats = {}  # {chat_id: [(day1, time1), (day2, time2)]}
-# time_limit_of_chats = {}  # {chat_id: limit}
-# paused_chats = []
-
-# chat_id | name | owner_id | members_id         | pause | limit | contact_with_chat | heads_of_chat       | schedule_of_chat                    |
-# int     | str  | int      | array_of_int(JSON) | bool  | int   | bool              | array_of_int(JSON)  | array_of_pair(day, time)(JSON)      |
-
-# student_id | incapable | contact
-# int        | str       | bool
-
 
 def get_list_of_users():
-    headers = {
-        "Authorization": f"Bearer {access_token}"
-    }
-
-    response = requests.get(base_url + "/users", headers=headers)
+    response = requests.get(base_url + "/users", headers=header)
     if response.status_code == 200:
         users_data = response.json().get('data', [])
         return users_data
@@ -43,9 +25,6 @@ def get_list_of_users():
 
 
 def get_users(per=50, page=1, query=None):
-    headers = {
-        "Authorization": f"Bearer {access_token}"
-    }
     params = {
         "per": per,
         "page": page
@@ -53,7 +32,7 @@ def get_users(per=50, page=1, query=None):
     if query:
         params["query"] = query
 
-    response = requests.get(base_url + "/users", headers=headers, params=params)
+    response = requests.get(base_url + "/users", headers=header, params=params)
     if response.status_code == 200:
         return response.json().get('data', [])
     else:
@@ -76,10 +55,6 @@ def get_user_id_by_nickname(nickname):
 
 # A function to get a user information
 def get_user_info(user_id):
-    header = {
-        "Authorization": f"Bearer {access_token}"
-    }
-
     response = requests.get(base_url + f"/users/{user_id}", headers=header)
     if response.status_code == 200:
         user_data = response.json().get('data', [])
@@ -90,10 +65,6 @@ def get_user_info(user_id):
 
 
 def get_all_chats():
-    headers = {
-        "Authorization": f"Bearer {access_token}"
-    }
-
     all_chats = []
     page = 1
     per_page = 50
@@ -103,7 +74,7 @@ def get_all_chats():
             "per": per_page,
             "page": page
         }
-        response = requests.get(base_url + "/chats", headers=headers, params=params)
+        response = requests.get(base_url + "/chats", headers=header, params=params)
         if response.status_code == 200:
             chats_data = response.json().get('data', [])
             if not chats_data:
@@ -119,10 +90,6 @@ def get_all_chats():
 
 # A function for getting info of chat
 def get_chat_info(chat_id):
-    header = {
-        "Authorization": f"Bearer {access_token}"
-    }
-
     response = requests.get(base_url + f"/chats/{chat_id}", headers=header)
     if response.status_code == 200:
         chat_data = response.json().get('data', [])
@@ -134,10 +101,6 @@ def get_chat_info(chat_id):
 
 # A function for getting an array of IDs of users participating in a conversation or channel
 def get_chat_members(chat_id):
-    header = {
-        "Authorization": f"Bearer {access_token}"
-    }
-
     response = requests.get(base_url + f"/chats/{chat_id}", headers=header)
     if response.status_code == 200:
         chat_data = response.json()
@@ -193,11 +156,7 @@ def get_list_of_messages(chat_id):
 
 # A function to get thread responses
 def get_thread_responses(message_id):
-    headers = {
-        "Authorization": f"Bearer {access_token}"
-    }
-
-    response = requests.get(base_url + f"/messages/{message_id}", headers=headers)
+    response = requests.get(base_url + f"/messages/{message_id}", headers=header)
     if response.status_code == 200:
         threads_data = response.json().get('data', [])
         if threads_data['thread'] is not None:
@@ -215,6 +174,7 @@ async def handle_first_contact_with_user(user_id):
         query = select(StudentOrm).where(StudentOrm.student_id == user_id)
         result = await session.execute(query)
         student = result.scalars().first()
+        user_info = get_user_info(user_id)
 
         if not student:
             welcome_message = (
@@ -228,9 +188,21 @@ async def handle_first_contact_with_user(user_id):
             )
             send_message("user", user_id, welcome_message)
 
-            new_student = StudentOrm(student_id=user_id, incapable="")
+            new_student = StudentOrm(student_id=user_id, first_name=user_info['first_name'], last_name=user_info['last_name'], nickname=user_info['nickname'], incapable="")
             session.add(new_student)
             await session.commit()
+        else:
+            if student.first_name != user_info['first_name'] or student.last_name != ['last_name'] or student.nickname != ['nickname']:
+                await session.execute(
+                    update(StudentOrm)
+                    .where(StudentOrm.student_id == user_id)
+                    .values(
+                        first_name=user_info['first_name'],
+                        last_name=user_info['last_name'],
+                        nickname=user_info['nickname']
+                    )
+                )
+                await session.commit()
 
 
 # A function for interviewing students of chat
@@ -275,11 +247,12 @@ async def handle_answers(chat, time):
         if member in message_ids[chat_id] and member not in incapable_students:
             answer = get_thread_responses(message_ids[chat_id][member])
             if answer is not None:
-                user_info = get_user_info(member)
+                #user_info = get_user_info(member)
+                user_info = await get_student_from_db(session, member)
                 answers = answer.split('\n')
                 if len(answers) == 4:
                     message_content = (
-                        f"Стендап пользователя **'{user_info['first_name']} {user_info['last_name']}'**:\n\n"
+                        f"Стендап пользователя **'{user_info.first_name} {user_info.last_name}'**:\n\n"
                         f"**1: Что было сделано?**\n{answers[0][2:]}\n"
                         f"**2: Какие планы до следующего стендапа?**\n{answers[1][2:]}\n"
                         f"**3: Какие трудности возникли?**\n{answers[2][2:]}\n"
@@ -292,21 +265,24 @@ async def handle_answers(chat, time):
                 late_student.append(member)
 
     for member in students_with_incorrect_answer:
-        user_info = get_user_info(member)
-        incorrect_content = (f"Пользователь '{user_info['first_name']} {user_info['last_name']}' не справился с форматированием, вот его ответ:\n"
+        # user_info = get_user_info(member)
+        user_info = await get_student_from_db(session, member)
+        incorrect_content = (f"Пользователь '{user_info.first_name} {user_info.last_name}' не справился с форматированием, вот его ответ:\n"
                             f"{students_with_incorrect_answer[member]}\n")
         send_message("discussion", chat_id, incorrect_content)
 
     message_content = ""
 
     for member in late_student:
-        user_info = get_user_info(member)
-        message_content += f"Пользователь '{user_info['first_name']} {user_info['last_name']}' опоздал\n"
+        # user_info = get_user_info(member)
+        user_info = await get_student_from_db(session, member)
+        message_content += f"Пользователь '{user_info.first_name} {user_info.last_name}' опоздал\n"
 
     for member in get_chat_members(chat_id):
         if member in incapable_students and member not in chat.ignore_members:
-            user_info = get_user_info(member)
-            message_content += f"Пользователь '{user_info['first_name']} {user_info['last_name']}' {incapable_students[member]}\n"
+            # user_info = get_user_info(member)
+            user_info = await get_student_from_db(session, member)
+            message_content += f"Пользователь '{user_info.first_name} {user_info.last_name}' {incapable_students[member]}\n"
 
     if message_content != "":
         send_message("discussion", chat_id, message_content)

@@ -29,10 +29,12 @@ class StudentOrm(Base):
     __tablename__ = 'students'
 
     student_id = Column(Integer, primary_key=True, index=True)
+    first_name = Column(String)
+    last_name = Column(String)
+    nickname = Column(String)
     incapable = Column(String)
 
-
-load_dotenv()
+    load_dotenv()
 # postgresql+asyncpg://postgres:1234@localhost:5432/standup
 DATABASE_URL = f"postgresql+asyncpg://{os.getenv('DB_USER')}:{os.getenv('DB_PASS')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
 engine = create_async_engine(DATABASE_URL, echo=True)
@@ -85,7 +87,6 @@ async def delete_chat(db: AsyncSession, chat_id: int):
 async def get_student_from_db(db: AsyncSession, student_id: int):
     result = await db.execute(select(StudentOrm).where(StudentOrm.student_id == student_id))
     return result.scalars().first()
-
 
 async def create_student(db: AsyncSession, student: StudentOrm):
     db.add(student)

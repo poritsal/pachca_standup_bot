@@ -1,26 +1,24 @@
-import pytz
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Optional
-from api import *
-from datetime import datetime
-import asyncio
-import re
 from contextlib import asynccontextmanager
 
+import pytz
+from datetime import datetime
+import re
+
+import asyncio
+from api import *
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     asyncio.create_task(main_loop())
     yield
+    await close_db()
+
 
 app = FastAPI(lifespan=lifespan)
-
-
-@app.get("/")
-async def read_root():
-    return {"message": "Server is running"}
 
 
 class WebhookEvent(BaseModel):
@@ -34,6 +32,11 @@ class WebhookEvent(BaseModel):
     created_at: str
     chat_id: int
     thread: Optional[dict] = None
+
+
+@app.get("/")
+async def read_root():
+    return {"message": "Server is running"}
 
 
 @app.post("/webhook")
