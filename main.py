@@ -8,7 +8,7 @@ from datetime import datetime
 import re
 
 import asyncio
-from api import *
+from handle_standup import *
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
