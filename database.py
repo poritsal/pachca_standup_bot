@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, JSON
+from sqlalchemy import Column, Integer, String, Boolean, JSON, MetaData
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.future import select
@@ -34,7 +34,6 @@ class StudentOrm(Base):
     last_name = Column(String)
     nickname = Column(String)
     incapable = Column(String)
-
 
 
 # postgresql+asyncpg://postgres:1234@localhost:5432/standup
