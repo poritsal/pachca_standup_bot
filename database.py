@@ -38,7 +38,6 @@ class StudentOrm(Base):
 
 # postgresql+asyncpg://postgres:1234@localhost:5432/standup
 engine = create_async_engine(f"postgresql+asyncpg://{os.getenv('DB_USER')}:{os.getenv('DB_PASS')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}", echo=False)
-
 SessionLocal = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
 
 
