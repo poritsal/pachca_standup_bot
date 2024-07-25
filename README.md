@@ -34,6 +34,7 @@ pip install -r requirements.txt
 4. Создайте файл .env в корневой директории проекта и добавьте туда токен доступа и ID вашего бота:
 ```
 access_token=your_access_token
+
 bot_id=your_bot_id
 ```
 ## Использование
