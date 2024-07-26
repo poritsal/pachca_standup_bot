@@ -44,7 +44,7 @@ async def handle_webhook(event: WebhookEvent):
     content = event.content
     chat = get_chat_info(event.chat_id)
 
-    if content.startswith("/sick"):
+    if content.startswith("/standup-sick"):
         if chat['owner_id'] != bot_id:
             return
         user_id = event.user_id
@@ -59,12 +59,12 @@ async def handle_webhook(event: WebhookEvent):
                 await session.execute(stmt)
                 await session.commit()
 
-                sick_message = "Надеюсь на твое скорейшее выздоровление. Напиши /return, когда вернешься и захочешь принять участие в следующем стендапе."
+                sick_message = "Надеюсь на твое скорейшее выздоровление. Напиши /standup-return, когда вернешься и захочешь принять участие в следующем стендапе."
                 send_message("user", user_id, sick_message)
             else:
-                send_message("user", user_id, "Вероятно ты уже болеешь или отдыхаешь, напиши /return и повтори запрос")
+                send_message("user", user_id, "Вероятно ты уже болеешь или отдыхаешь, напиши /standup-return и повтори запрос")
 
-    elif content.startswith("/rest"):
+    elif content.startswith("/standup-rest"):
         if chat['owner_id'] != bot_id:
             return
         user_id = event.user_id
@@ -79,12 +79,12 @@ async def handle_webhook(event: WebhookEvent):
                 await session.execute(stmt)
                 await session.commit()
 
-                rest_message = "Приятного тебе отдыха. Напиши /return, когда вернешься и захочешь принять участие в следующем стендапе."
+                rest_message = "Приятного тебе отдыха. Напиши /standup-return, когда вернешься и захочешь принять участие в следующем стендапе."
                 send_message("user", user_id, rest_message)
             else:
-                send_message("user", user_id, "Вероятно ты уже болеешь или отдыхаешь, напиши /return и повтори запрос")
+                send_message("user", user_id, "Вероятно ты уже болеешь или отдыхаешь, напиши /standup-return и повтори запрос")
 
-    elif content.startswith("/return"):
+    elif content.startswith("/standup-return"):
         if chat['owner_id'] != bot_id:
             return
         user_id = event.user_id
@@ -102,7 +102,7 @@ async def handle_webhook(event: WebhookEvent):
                 sick_message = "Отлично, буду ждать твоих ответов в комментариях."
                 send_message("user", user_id, sick_message)
 
-    elif content.startswith("/ignore"):
+    elif content.startswith("/standup-ignore"):
         if chat['owner_id'] == bot_id:
             return
 
@@ -139,9 +139,9 @@ async def handle_webhook(event: WebhookEvent):
 
                 send_message("discussion", chat_id, ignore_message)
             else:
-                send_message("discussion", chat_id, "Неправильный формат ввода, пример: '/ignore @nickname1 @nickname2'")
+                send_message("discussion", chat_id, "Неправильный формат ввода, пример: '/standup-ignore @nickname1 @nickname2'")
 
-    elif content.startswith("/schedule"):
+    elif content.startswith("/standup-schedule"):
         if chat['owner_id'] == bot_id:
             return
 
@@ -204,7 +204,7 @@ async def handle_webhook(event: WebhookEvent):
 
             send_message("discussion", chat_id, schedule_message)
 
-    elif content.startswith("/limit"):
+    elif content.startswith("/standup-limit"):
         if chat['owner_id'] == bot_id:
             return
 
@@ -216,7 +216,7 @@ async def handle_webhook(event: WebhookEvent):
         try:
             time_limit = int(content.split()[1])
         except (IndexError, ValueError):
-            send_message("discussion", chat_id, "Неправильный формат команды. Используйте /limit <минуты>.")
+            send_message("discussion", chat_id, "Неправильный формат команды. Используйте /standup-limit <минуты>.")
             return
 
         async with SessionLocal() as session:
@@ -233,7 +233,7 @@ async def handle_webhook(event: WebhookEvent):
             await session.commit()
             send_message("discussion", chat_id, f"Ограничение времени на стендап установлено: {time_limit} минут.")
 
-    elif content.startswith("/pause"):
+    elif content.startswith("/standup-pause"):
         if chat['owner_id'] == bot_id:
             return
 
@@ -257,32 +257,32 @@ async def handle_webhook(event: WebhookEvent):
                 send_message("discussion", chat_id, f"Стендапы возобновлены")
             else:
                 chat_record.pause = True
-                send_message("discussion", chat_id, f"Стендапы приостановлены, используй /pause, чтобы возобновить работу бота")
+                send_message("discussion", chat_id, f"Стендапы приостановлены, используй /standup-pause, чтобы возобновить работу бота")
 
             session.add(chat_record)
             await session.commit()
 
-    elif content.startswith("/help"):
+    elif content.startswith("/standup-help"):
         if chat['owner_id'] != bot_id:
             help_message = (
                 "Используйте:\n"
-                "/pause, чтобы приостановить стендапы в этом чате.\n"
-                "/ignore, чтобы назначить руководителей для стендапов.\n"
-                "/limit, чтобы установить ограничение по времени на стендап. Формат: /limit <минуты>.\n"
-                "/schedule, чтобы установить расписание стендапов. Формат: /schedule <день> <время> ...\n"
-                "/delete, чтобы удалить информацию о стендапах в этом чате.\n"
+                "/standup-pause, чтобы приостановить стендапы в этом чате.\n"
+                "/standup-ignore, чтобы назначить руководителей для стендапов.\n"
+                "/standup-limit, чтобы установить ограничение по времени на стендап. Формат: /standup-limit <минуты>.\n"
+                "/standup-schedule, чтобы установить расписание стендапов. Формат: /standup-schedule <день> <время> ...\n"
+                "/standup-delete, чтобы удалить информацию о стендапах в этом чате.\n"
             )
             send_message("discussion", event.entity_id, help_message)
         else:
             user_help_message = (
                 "Используйте:\n"
-                "/sick, чтобы сообщить, что вы заболели.\n"
-                "/rest, чтобы сообщить, что вы отдыхаете.\n"
-                "/return, чтобы сообщить, что вы вернулись к работе."
+                "/standup-sick, чтобы сообщить, что вы заболели.\n"
+                "/standup-rest, чтобы сообщить, что вы отдыхаете.\n"
+                "/standup-return, чтобы сообщить, что вы вернулись к работе."
             )
             send_message("user", event.entity_id, user_help_message)
 
-    elif content.startswith("/delete"):
+    elif content.startswith("/standup-delete"):
         if chat['owner_id'] == bot_id:
             return
 
@@ -312,7 +312,7 @@ async def handle_webhook(event: WebhookEvent):
             )
             await session.commit()
 
-            send_message("discussion", chat_id, f"Стендапы удалены, используйте /schedule, /limit, /head для восстановления работы")
+            send_message("discussion", chat_id, f"Стендапы удалены, используйте /standup-schedule, /standup-limit, /standup-head для восстановления работы")
 
 
 async def main_loop():
@@ -340,7 +340,3 @@ async def main_loop():
                         asyncio.create_task(handle_answers(chat, chat.limit * 60))
 
         await asyncio.sleep(60)
-
-
-if __name__ == '__main__':
-    asyncio.run(main_loop())
