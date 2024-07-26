@@ -106,6 +106,10 @@ DB_NAME=standup
    - Начинающиеся с команд
  - В поле команды вставьте следующую строку:
     - ```/standup-sick, /standup-rest, /standup-return, /standup-heads, /standup-schedule, /standup-limit, /standup-pause, /standup-help, /standup-delete, /standup-ignore```
+
+![Sample Image](images/webhook.png)
+7. Добавьте чат-бот в каналы, в которых хотите проводить стендапы 
+![Sample Image](images/integration.png)
 ## Взаимодействие с Docker-контейнерами
 1. Просмотр всех контейнеров
 Для просмотра всех контейнеров, включая остановленные:
