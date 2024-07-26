@@ -15,7 +15,8 @@ async def handle_first_contact_with_user(user_id):
 
         if not student:
             welcome_message = (
-                "Я бот для проведения стендап-отчетов. Пожалуйста, отвечай на мои следующие сообщения в комментариях.\n"
+                "Я бот для проведения стендап-отчетов. Пожалуйста, отвечай на мои следующие сообщения в комментариях (в тредах).\n"
+                "Ты можешь редактировать ответ в течение отведенного на стендап времени, в случае нескольких сообщений в комментариях будет отправлено последнее.\n"
                 "Если ты заболел или ушёл в отпуск, напиши **/sick** или **/rest** соответственно.\n\n"
                 "**Формат ответа на стендапы:**\n"
                 "1) текст\n"
@@ -56,7 +57,7 @@ async def handle_standup(chat):
         if member not in chat.ignore_members and member != bot_id and member not in incapable_students:
             await handle_first_contact_with_user(member)
             student_of_chat.setdefault(chat.chat_id, []).append(member)
-            standup_message = (f"**Напиши в комментариях стендап-отчет для проекта '{chat.name}':**\n"
+            standup_message = (f"**Напиши в комментариях (в треде) стендап-отчет для проекта '{chat.name}':**\n"
                                f"1) Что было сделано?\n"
                                f"2) Какие планы до следующего стендапа?\n"
                                f"3) Какие трудности возникли?\n"
@@ -102,7 +103,7 @@ async def handle_answers(chat, time):
 
     for member in students_with_incorrect_answer:
         user_info = await get_student_from_db(session, member)
-        incorrect_content = (f"Пользователь '{user_info.first_name} {user_info.last_name}' не справился с форматированием, вот его ответ:\n"
+        incorrect_content = (f"Стендап пользователя **'{user_info.first_name} {user_info.last_name}'**:\n\n"
                             f"{students_with_incorrect_answer[member]}\n")
         send_message("discussion", chat_id, incorrect_content)
 
@@ -142,8 +143,13 @@ async def handle_first_contact_with_chat():
                     "**2. Ограничение времени на стендап:**\n"
                     "   Установите максимальное время (в минутах), которое может занимать каждый стендап, с помощью команды **/limit**. Пример: '/limit 60'\n"
                     "**3. Расписание стендапов:**\n"
-                    "   Укажите время, когда будут проводиться стендапы, используя команду **/schedule**. Формат ввода: '/schedule <день> <время>'. Пример: '/schedule понедельник 18:00 среда 18:00 пятница 18:00'.\n\n"
-                    "Для приостановки или возобновления стендапов в этом чате, используйте команду **/pause**. Для удаления информацию о стендапах используйте **/delete**. Для вызова справки используйте **/help**"
+                    "   Укажите время, когда будут проводиться стендапы, используя команду **/schedule**. Формат ввода: '/schedule <день> <время>'. Пример: '/schedule понедельник 18:00 среда 18:00 пятница 18:00'.\n"
+                    "Для приостановки или возобновления стендапов в этом чате, используйте команду **/pause**. Для удаления информацию о стендапах используйте **/delete**. Для вызова справки используйте **/help**\n\n"
+                    "**Сейчас установлено стандартное расписание для стендапов:**\n"
+                    "понедельник 18:00\n"
+                    "среда 18:00\n"
+                    "пятница 18:00\n\n"
+                    "**Ограничение по времени 360 минут**"
                 )
                 send_message("discussion", chat_id, input_message)
 
@@ -153,12 +159,13 @@ async def handle_first_contact_with_chat():
                     owner_id=chat['owner_id'],
                     member_ids=chat['member_ids'],
                     pause=False,
-                    limit=60,
+                    limit=360,
                     ignore_members=[],
-                    schedule_of_chat=[]
+                    schedule_of_chat=[('понедельник', '18:00'), ('среда', '18:00'), ('пятница', '18:00')]
                 )
                 session.add(new_chat)
                 await session.commit()
+
             elif chat['owner_id'] != bot_id:
                 if db_chats_dict[chat_id].name != chat['name'] or db_chats_dict[chat_id].member_ids != chat['member_ids']:
                     await session.execute(
@@ -170,3 +177,30 @@ async def handle_first_contact_with_chat():
                         )
                     )
                     await session.commit()
+
+        api_chat_ids = {chat['id'] for chat in api_chats}
+
+        for db_chat in db_chats:
+            if db_chat.chat_id not in api_chat_ids:
+                await session.execute(
+                    delete(ChatOrm).where(ChatOrm.chat_id == db_chat.chat_id)
+                )
+                await session.commit()
+
+        await session.commit()
+
+
+async def sync_students_with_api():
+    async with SessionLocal() as session:
+        students_from_api = get_users()
+        api_student_ids = [student['id'] for student in students_from_api]
+
+        result = await session.execute(select(StudentOrm))
+        students_from_db = result.scalars().all()
+        api_students_from_db = [student.student_id for student in students_from_db]
+
+        for student_id in api_students_from_db:
+            if student_id not in api_student_ids:
+                await session.execute(delete(StudentOrm).where(StudentOrm.student_id == student_id))
+
+        await session.commit()

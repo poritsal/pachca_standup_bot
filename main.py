@@ -105,6 +105,11 @@ async def handle_webhook(event: WebhookEvent):
     elif content.startswith("/ignore"):
         if chat['owner_id'] == bot_id:
             return
+
+        if get_user_info(event.user_id)['role'] != 'admin':
+            send_message('discussion', event.entity_id, "Возможность редактирования стендапов есть только у администратора")
+            return
+
         nicknames = content.split()[1:]
         chat_id = event.entity_id
 
@@ -138,6 +143,10 @@ async def handle_webhook(event: WebhookEvent):
 
     elif content.startswith("/schedule"):
         if chat['owner_id'] == bot_id:
+            return
+
+        if get_user_info(event.user_id)['role'] != 'admin':
+            send_message('discussion', event.entity_id, "Возможность редактирования стендапов есть только у администратора")
             return
 
         schedule = content.split()[1:]
@@ -183,6 +192,8 @@ async def handle_webhook(event: WebhookEvent):
             for day, time in new_schedule:
                 schedule_message += f"{day} {time}\n"
 
+            schedule_message += f"\n**Ограничение по времени {chat_record.limit} минут**\n\n"
+
             schedule_message += "**Участники:\n**"
             ignore = chat_record.ignore_members if chat_record.ignore_members else []
 
@@ -195,6 +206,10 @@ async def handle_webhook(event: WebhookEvent):
 
     elif content.startswith("/limit"):
         if chat['owner_id'] == bot_id:
+            return
+
+        if get_user_info(event.user_id)['role'] != 'admin':
+            send_message('discussion', event.entity_id, "Возможность редактирования стендапов есть только у администратора")
             return
 
         chat_id = event.entity_id
@@ -218,10 +233,14 @@ async def handle_webhook(event: WebhookEvent):
             await session.commit()
             send_message("discussion", chat_id, f"Ограничение времени на стендап установлено: {time_limit} минут.")
 
-
     elif content.startswith("/pause"):
         if chat['owner_id'] == bot_id:
             return
+
+        if get_user_info(event.user_id)['role'] != 'admin':
+            send_message('discussion', event.entity_id, "Возможность редактирования стендапов есть только у администратора")
+            return
+
         chat_id = event.entity_id
 
         async with SessionLocal() as session:
@@ -266,6 +285,11 @@ async def handle_webhook(event: WebhookEvent):
     elif content.startswith("/delete"):
         if chat['owner_id'] == bot_id:
             return
+
+        if get_user_info(event.user_id)['role'] != 'admin':
+            send_message('discussion', event.entity_id, "Возможность редактирования стендапов есть только у администратора")
+            return
+
         chat_id = event.entity_id
         async with SessionLocal() as session:
             query = select(ChatOrm).where(ChatOrm.chat_id == chat_id)
@@ -298,6 +322,7 @@ async def main_loop():
     while True:
         current_time = datetime.now(tz)
         await handle_first_contact_with_chat()
+        await sync_students_with_api()
 
         async with SessionLocal() as session:
             chats = await get_all_chats_from_db(session)
@@ -315,6 +340,7 @@ async def main_loop():
                         asyncio.create_task(handle_answers(chat, chat.limit * 60))
 
         await asyncio.sleep(60)
+
 
 if __name__ == '__main__':
     asyncio.run(main_loop())
