@@ -3,12 +3,12 @@ version: '3.8'
 services:
 
   fastapi:
-    build: .
+    build: ../StandUp
     ports:
       - "80:80"
     restart: always
     env_file:
-      - .env
+      - ../StandUp/.env
     depends_on:
       - postgres
     container_name: fastapi
@@ -22,7 +22,7 @@ services:
     container_name: postgres
     restart: always
     env_file:
-      - .env
+      - ../StandUp/.env
     environment:
       DB_USER: ${DB_USER}
       DB_PASS: ${DB_PASS}

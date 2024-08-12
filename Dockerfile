@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-COPY . .
+COPY ../StandUp .
 
 RUN pip install -r requirements.txt
 

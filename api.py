@@ -6,17 +6,10 @@ load_dotenv()
 access_token = os.getenv('access_token')
 bot_id = int(os.getenv('bot_id'))
 base_url = "https://api.pachca.com/api/shared/v1"
-header = {"Authorization": f"Bearer {access_token}"}
-
-
-def get_list_of_users():
-    response = requests.get(base_url + "/users", headers=header)
-    if response.status_code == 200:
-        users_data = response.json().get('data', [])
-        return users_data
-    else:
-        print(f"Failed to get users: {response.status_code}, {response.text}")
-        return []
+header = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
 
 
 def get_users(per=50, page=1, query=None):
@@ -35,7 +28,19 @@ def get_users(per=50, page=1, query=None):
         return []
 
 
-def get_user_id_by_nickname(nickname):
+def get_all_users():
+    all_users = []
+    page = 1
+    while True:
+        users = get_users(page=page)
+        if not users:
+            break
+        all_users.extend(users)
+        page += 1
+    return all_users
+
+
+def get_user_id_by_nickname(nickname: str):
     page = 1
     while True:
         users = get_users(page=page, query=nickname)
@@ -49,7 +54,7 @@ def get_user_id_by_nickname(nickname):
 
 
 # A function to get a user information
-def get_user_info(user_id):
+def get_user_info(user_id: int):
     response = requests.get(base_url + f"/users/{user_id}", headers=header)
     if response.status_code == 200:
         user_data = response.json().get('data', [])
@@ -84,7 +89,7 @@ def get_all_chats():
 
 
 # A function for getting info of chat
-def get_chat_info(chat_id):
+def get_chat_info(chat_id: int):
     response = requests.get(base_url + f"/chats/{chat_id}", headers=header)
     if response.status_code == 200:
         chat_data = response.json().get('data', [])
@@ -95,7 +100,7 @@ def get_chat_info(chat_id):
 
 
 # A function for getting an array of IDs of users participating in a conversation or channel
-def get_chat_members(chat_id):
+def get_chat_members(chat_id: int):
     response = requests.get(base_url + f"/chats/{chat_id}", headers=header)
     if response.status_code == 200:
         chat_data = response.json()
@@ -107,11 +112,7 @@ def get_chat_members(chat_id):
 
 
 # A function to send message
-def send_message(entity_type, entity_id, text):
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }
+def send_message(entity_type: str, entity_id: int, text: str):
     params = {
         "message": {
             "entity_type": entity_type,
@@ -120,7 +121,7 @@ def send_message(entity_type, entity_id, text):
         }
     }
 
-    response = requests.post(base_url + "/messages", json=params, headers=headers)
+    response = requests.post(base_url + "/messages", json=params, headers=header)
     if response.status_code == 201:
         message_data = response.json().get('data', [])
         return message_data
@@ -131,7 +132,7 @@ def send_message(entity_type, entity_id, text):
 
 
 # A function to get list of messages
-def get_list_of_messages(chat_id):
+def get_list_of_messages(chat_id: int):
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json"
@@ -150,7 +151,7 @@ def get_list_of_messages(chat_id):
 
 
 # A function to get thread responses
-def get_thread_responses(message_id):
+def get_thread_responses(message_id: int):
     response = requests.get(base_url + f"/messages/{message_id}", headers=header)
     if response.status_code == 200:
         threads_data = response.json().get('data', [])
