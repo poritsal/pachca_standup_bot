@@ -10,10 +10,13 @@ from webhook_handler import router as webhook_router
 from handle_standup import *
 
 
+tasks = []
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
-    asyncio.create_task(main_loop())
+    main_task = asyncio.create_task(main_loop())
+    tasks.append(main_task)
     yield
     await close_db()
 
@@ -32,6 +35,18 @@ app.include_router(webhook_router)
 @app.get("/")
 async def read_root():
     return {"message": "Server is running"}
+
+
+@app.get("/tasks")
+async def get_tasks():
+    task_info = [{
+        "name": task._coro.__name__,
+        "done": task.done()
+    } for task in tasks]
+    return {
+        "task_count": len(tasks),
+        "tasks": task_info
+    }
 
 
 async def main_loop() -> None:
@@ -56,6 +71,7 @@ async def main_loop() -> None:
 
                     if current_time.strftime("%A").lower() == days_dict[day] and current_time.time().hour == schedule_time.hour and current_time.time().minute == schedule_time.minute:
                         await handle_standup(chat)
-                        asyncio.create_task(handle_answers(chat, chat.limit * 60))
+                        standup_task = asyncio.create_task(handle_answers(chat, chat.limit * 60))
+                        tasks.append(standup_task)
 
         await asyncio.sleep(60)
