@@ -4,6 +4,7 @@ from typing import Optional
 from contextlib import asynccontextmanager
 import pytz
 from datetime import datetime
+from fastapi.middleware.cors import CORSMiddleware
 
 from webhook_handler import router as webhook_router
 from handle_standup import *
@@ -18,6 +19,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(webhook_router)
 
 
